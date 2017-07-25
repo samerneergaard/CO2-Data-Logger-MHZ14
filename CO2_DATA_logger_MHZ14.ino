@@ -1,23 +1,17 @@
-#include <SoftwareSerial.h>
-#include <Wire.h>  // Comes with Arduino IDE
+#include <SPI.h>
 
-SoftwareSerial mySerial(A0, A1); // A0 and A1 on Arduino to RX, TX on MH-Z14 respectively
+#define CHILD_ID 0
+#define CO2_SENSOR_PWM_PIN 3
 
-// Calibrate zero point command  
-//byte cmd[9] = {0xFF,0x01,0x87,0x00,0x00,0x00,0x00,0x00,0x78};
-//another calibrate zero point command, not sure which is correct
-//byte cmd[9] = {0xff, 0x87, 0x87, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf2}; 
+unsigned long SLEEP_TIME = 30*1000; // Sleep time between reads (in milliseconds)
 
-//Calibrate span point command
-//byte cmd[9] = {0xFF,0x01,0x88,0x07,0xD0,0x00,0x00,0x00,0xA0};
-//another calibrate span point command, not sure which is correct
-//byte cmd[9] = {0xff, 0x88, 0x88, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf0}; 
-
-
-//Reqest Gas concentration command
-byte cmd[9] = {0xFF,0x01,0x86,0x00,0x00,0x00,0x00,0x00,0x79}; 
-char response[9]; 
-String ppmString = " ";
+float valAIQ =0.0;
+float lastAIQ =0.0;
+unsigned long duration;
+long ppm;
+/*MySensor gw;
+MyMessage msg(CHILD_ID, V_LEVEL);
+*/
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------MH-Z14
 #include <SPI.h>
 #include <SD.h>
@@ -27,13 +21,13 @@ String ppmString = " ";
 // A simple data logger for the Arduino analog pins
 
 // how many milliseconds between grabbing data and logging it. 1000 ms is once a second
-#define LOG_INTERVAL  90000 // mills between entries (reduce to take more/faster data)
+#define LOG_INTERVAL  10000 // mills between entries (reduce to take more/faster data)
 
 // how many milliseconds before writing the logged data permanently to disk
 // set it to the LOG_INTERVAL to write each time (safest)
 // set it to 10*LOG_INTERVAL to write all data every 10 datareads, you could lose up to 
 // the last 10 reads if power is lost but it uses less power and is much faster!
-#define SYNC_INTERVAL 90000 // mills between calls to flush() - to write data to the card
+#define SYNC_INTERVAL 10000 // mills between calls to flush() - to write data to the card
 uint32_t syncTime = 0; // time of last sync()
 
 #define ECHO_TO_SERIAL   1 // echo data to serial port
@@ -82,7 +76,7 @@ Adafruit_BME280 bme; // I2C
 
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------BME/BMP280
 
-int led = 9;
+//int led = 9;
 
 int carboni = 0;
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------LED/Variables
@@ -102,9 +96,8 @@ void error(char *str)
 void setup() {
    // Run serial to connect to a computer
   Serial.begin(9600);
-  // Start the serial connection to the MH-Z14
-  mySerial.begin(9600);
-  delay(100);
+
+  pinMode(CO2_SENSOR_PWM_PIN, INPUT);
   
   // initialize the SD card
   Serial.print("Initializing SD card...");
@@ -128,7 +121,7 @@ void setup() {
 
     delay(100); // let sensor boot up
   pinMode(10, OUTPUT);
-  pinMode(led, OUTPUT);
+ // pinMode(led, OUTPUT);
   
   // see if the card is present and can be initialized:
 
@@ -220,12 +213,11 @@ void loop(void)
   Serial.print('"');
 #endif //ECHO_TO_SERIAL
 
-//Pinging CO2, we read, reply and translate intoPPM
-  mySerial.write(cmd,9);
-  mySerial.readBytes(response, 9);
-  int responseHigh = (int) response[2];
-  int responseLow = (int) response[3];
-  int ppm = (256*responseHigh)+responseLow;
+ while(digitalRead(CO2_SENSOR_PWM_PIN) == HIGH) {;}
+  //wait for the pin to go HIGH and measure HIGH time
+  duration = pulseIn(CO2_SENSOR_PWM_PIN, HIGH, 2000000);
+  ppm = 5000 * ((duration/1000) - 2)/1000;
+  //Serial.print(ppm);
 
   float carboni = ppm * 100.0F * ((bme.readTemperature() + 273) * (1013))/(bme.readPressure() * (298));
 
